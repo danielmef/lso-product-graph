@@ -136,7 +136,7 @@
       opacity: 0; animation: slideDown .7s ease .6s forwards;
     }
     #lso-versions-img {
-      height: 144px; width: auto;
+      height: 36px; width: auto; max-width: 120px; object-fit: contain;
       border-radius: 4px;
       cursor: zoom-in;
       transition: transform .15s, box-shadow .15s;
@@ -599,17 +599,7 @@ amartus,Amartus,company,medium,www.amartus.com,Worldwide,,yes`;
       .style("opacity", 0)
       .call(s => s.transition().duration(900).delay(500).style("opacity", 1));
 
-    /* ── HUB LINK LABEL ──────────────────────────────────────────────────── */
-    const hubLinkLabel = g.append("text")
-      .attr("text-anchor", "middle")
-      .attr("dominant-baseline", "central")
-      .attr("fill", "rgba(26,39,68,0.4)")
-      .attr("font-size", "12px")
-      .attr("font-family", "'DM Sans', sans-serif")
-      .attr("pointer-events", "none")
-      .style("opacity", 0)
-      .text(window._subtitleText || "");
-    setTimeout(() => hubLinkLabel.text(window._subtitleText || "").style("opacity", 1), 800);
+    /* ── HUB LINK LABEL — not used in single-hub layout ── */
 
     /* ── NODES ───────────────────────────────────────────────────────────── */
     const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
@@ -717,26 +707,64 @@ amartus,Amartus,company,medium,www.amartus.com,Worldwide,,yes`;
       const grp = d3.select(this);
       const isHub = d.type === "hub";
       const words = d.label.split(" ");
-      const lines = words.length <= 2 ? words
-        : [words.slice(0, Math.ceil(words.length / 2)).join(" "),
-           words.slice(Math.ceil(words.length / 2)).join(" ")];
-      const fs = isHub ? 14 : (d.importance === "high" ? 13 : 11);
-      const lh = isHub ? 18 : (d.importance === "high" ? 15 : 13);
-      const totalH = (lines.length - 1) * lh;
 
-      lines.forEach((line, i) => {
-        grp.append("text")
-          .attr("text-anchor", "middle")
-          .attr("dominant-baseline", "central")
-          .attr("y", -totalH / 2 + i * lh)
-          .attr("fill", isHub ? "#fff" : HUB_COLOR)
-          .attr("font-size", `${fs}px`)
-          .attr("font-weight", isHub ? 700 : 500)
-          .attr("font-family", isHub ? "'Barlow Condensed', sans-serif" : "'DM Sans', sans-serif")
-          .attr("letter-spacing", isHub ? "1px" : "0.3px")
-          .attr("pointer-events", "none")
-          .text(isHub ? line.toUpperCase() : line);
-      });
+      if (isHub) {
+        // For hub square: wrap words one per line to fit inside the square
+        // Max width is radius*2 minus padding
+        const r   = radius(d);
+        const fs  = 14, lh = 18, pad = 12;
+        const maxW = r * 2 - pad * 2;
+        // Build lines by fitting words within maxW at ~8px per char (Barlow Condensed)
+        const charW = 8.5;
+        const lines = [];
+        let current = [];
+        words.forEach(word => {
+          const testLine = [...current, word].join(" ");
+          if (testLine.length * charW > maxW && current.length > 0) {
+            lines.push(current.join(" "));
+            current = [word];
+          } else {
+            current.push(word);
+          }
+        });
+        if (current.length) lines.push(current.join(" "));
+
+        const totalH = (lines.length - 1) * lh;
+        lines.forEach((line, i) => {
+          grp.append("text")
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "central")
+            .attr("y", -totalH / 2 + i * lh)
+            .attr("fill", "#fff")
+            .attr("font-size", `${fs}px`)
+            .attr("font-weight", 700)
+            .attr("font-family", "'Barlow Condensed', sans-serif")
+            .attr("letter-spacing", "1px")
+            .attr("pointer-events", "none")
+            .text(line.toUpperCase());
+        });
+      } else {
+        // Company nodes — split into max 2 lines
+        const lines = words.length <= 2 ? words
+          : [words.slice(0, Math.ceil(words.length / 2)).join(" "),
+             words.slice(Math.ceil(words.length / 2)).join(" ")];
+        const fs = d.importance === "high" ? 13 : 11;
+        const lh = d.importance === "high" ? 15 : 13;
+        const totalH = (lines.length - 1) * lh;
+        lines.forEach((line, i) => {
+          grp.append("text")
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "central")
+            .attr("y", -totalH / 2 + i * lh)
+            .attr("fill", HUB_COLOR)
+            .attr("font-size", `${fs}px`)
+            .attr("font-weight", 500)
+            .attr("font-family", "'DM Sans', sans-serif")
+            .attr("letter-spacing", "0.3px")
+            .attr("pointer-events", "none")
+            .text(line);
+        });
+      }
     });
 
     // GLF badge
