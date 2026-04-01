@@ -347,7 +347,7 @@
 
   <div id="api-dropdown-wrap">
     <img id="lso-versions-img"
-         src="https://danielmef.github.io/lso-api-graph/LSO_Versions_and_Releases.png"
+         src="https://danielmef.github.io/lso-product-graph/Product_versions.png"
          alt="LSO Versions and Releases" title="LSO Versions and Releases" />
     <select id="api-select"><option>Loading APIs…</option></select>
   </div>
@@ -358,7 +358,7 @@
   <!-- Lightbox -->
   <div id="lightbox">
     <span id="lightbox-close">&times;</span>
-    <img src="https://danielmef.github.io/lso-api-graph/LSO_Versions_and_Releases.png" alt="LSO Versions and Releases" />
+    <img src="https://danielmef.github.io/lso-product-graph/Product_versions.png" alt="LSO Versions and Releases" />
   </div>
 
   <!-- Implementation Survey -->
@@ -681,22 +681,36 @@ amartus,Amartus,company,medium,www.amartus.com,Worldwide,,yes`;
       });
     })();
 
-    // Outer ring (hub)
+    // Outer ring (hub) — square with rounded corners
     nodeSel.filter(d => d.type === "hub")
-      .append("circle")
-      .attr("r", d => radius(d) + 14)
+      .append("rect")
+      .attr("x", d => -(radius(d) + 14))
+      .attr("y", d => -(radius(d) + 14))
+      .attr("width",  d => (radius(d) + 14) * 2)
+      .attr("height", d => (radius(d) + 14) * 2)
+      .attr("rx", 6).attr("ry", 6)
       .attr("fill", "none")
       .attr("stroke", "rgba(61,123,199,0.15)")
       .attr("stroke-width", 1)
       .attr("stroke-dasharray", "4 3");
 
-    // Main circle
-    nodeSel.append("circle")
+    // Main shape — square for hub, circle for companies
+    nodeSel.filter(d => d.type === "hub")
+      .append("rect")
+      .attr("x", d => -radius(d))
+      .attr("y", d => -radius(d))
+      .attr("width",  d => radius(d) * 2)
+      .attr("height", d => radius(d) * 2)
+      .attr("rx", 8).attr("ry", 8)
+      .attr("fill", HUB_COLOR)
+      .attr("filter", "url(#shadow)");
+    nodeSel.filter(d => d.type !== "hub")
+      .append("circle")
       .attr("r", radius)
-      .attr("fill", d => d.type === "hub" ? HUB_COLOR : NODE_FILL)
-      .attr("stroke", d => d.type === "hub" ? "none" : NODE_COLOR)
-      .attr("stroke-width", d => d.type === "hub" ? 0 : 1.5)
-      .attr("filter", d => d.type === "hub" ? "url(#shadow)" : "url(#glow)");
+      .attr("fill", NODE_FILL)
+      .attr("stroke", NODE_COLOR)
+      .attr("stroke-width", 1.5)
+      .attr("filter", "url(#glow)");
 
     // Labels
     nodeSel.each(function(d) {
