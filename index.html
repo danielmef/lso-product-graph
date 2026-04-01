@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LSO Internet Access Interoperability</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:        #F0F4F9;
+      --grid:      rgba(61,123,199,0.07);
+      --text:      #1A2744;
+      --muted:     rgba(26,39,68,0.5);
+      --hub:       #1A2744;
+      --accent:    #3D7BC7;
+      --accent2:   #FD7801;
+      --card:      rgba(255,255,255,0.85);
+      --border:    rgba(61,123,199,0.18);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text);
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Subtle radial glow behind hub */
+    body::after {
+      content: '';
+      position: fixed;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(61,123,199,0.12) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Header */
+    #header {
+      position: fixed; top: 0; left: 0; right: 0;
+      padding: 22px 32px 0;
+      z-index: 10; pointer-events: none;
+    }
+    #title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 26px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--hub); line-height: 1;
+      opacity: 0; animation: slideDown .7s ease .2s forwards;
+      visibility: hidden;
+    }
+    #subtitle {
+      margin-top: 5px; font-size: 22px;
+      color: var(--muted); letter-spacing: .4px;
+      opacity: 0; animation: slideDown .7s ease .4s forwards;
+      visibility: hidden;
+    }
+    @keyframes slideDown {
+      from { opacity:0; transform:translateY(-10px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    @keyframes slideUp {
+      from { opacity:0; transform:translateY(10px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    /* Stats */
+    #stats {
+      position: fixed; top: 100px; right: 32px;
+      display: flex; gap: 28px;
+      z-index: 10;
+      opacity: 0; animation: slideDown .7s ease .5s forwards;
+    }
+    .stat { text-align: right; }
+    .stat-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 28px; font-weight: 700; line-height: 1;
+      color: var(--accent);
+    }
+    .stat-lbl { font-size: 11px; color: var(--muted); letter-spacing: .5px; }
+
+    /* Legend */
+    #legend {
+      position: fixed; bottom: 28px; left: 32px;
+      display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
+      z-index: 10;
+      opacity: 0; animation: slideUp .7s ease .9s forwards;
+    }
+    .leg { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .leg-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+
+    /* Hint */
+    #hint {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      font-size: 11px; color: var(--muted);
+      z-index: 10; white-space: nowrap;
+      opacity: 0; animation: slideUp .7s ease 1s forwards;
+    }
+
+    /* Logo */
+    #logo {
+      position: fixed; top: 22px; right: 32px;
+      z-index: 10;
+      opacity: 0; animation: slideDown .7s ease 1.1s forwards;
+    }
+    #logo img {
+      height: 64px; width: auto;
+      filter: brightness(0) saturate(100%) invert(15%) sepia(40%) saturate(800%) hue-rotate(190deg);
+      opacity: 0.75;
+    }
+
+    /* API Dropdown */
+    #api-dropdown-wrap {
+      position: fixed; top: 22px; left: 50%; transform: translateX(-50%);
+      z-index: 10;
+      display: flex; align-items: center; gap: 12px;
+      opacity: 0; animation: slideDown .7s ease .6s forwards;
+    }
+    #lso-versions-img {
+      height: 144px; width: auto;
+      border-radius: 4px;
+      cursor: zoom-in;
+      transition: transform .15s, box-shadow .15s;
+      box-shadow: 0 0 0 1px rgba(61,123,199,0.25);
+    }
+    #lso-versions-img:hover {
+      transform: scale(1.02);
+      box-shadow: 0 2px 16px rgba(61,123,199,0.2), 0 0 0 1px rgba(61,123,199,0.4);
+    }
+    #api-select {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      padding: 6px 32px 6px 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .15s;
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(26,39,68,0.4)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      min-width: 280px;
+      box-shadow: 0 1px 4px rgba(61,123,199,0.1);
+    }
+    #api-select:hover { border-color: var(--accent); }
+    #api-select option { background: #fff; color: var(--text); }
+
+    /* Lightbox */
+    #lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      justify-content: center; align-items: center;
+      cursor: zoom-out;
+      backdrop-filter: blur(4px);
+      animation: fadeIn .2s ease;
+    }
+    #lightbox.active { display: flex; }
+    #lightbox img {
+      max-width: 92vw; max-height: 88vh;
+      border-radius: 6px;
+      box-shadow: 0 8px 48px rgba(0,0,0,0.4);
+      pointer-events: none;
+    }
+    #lightbox-close {
+      position: fixed; top: 20px; right: 28px;
+      color: rgba(255,255,255,0.8);
+      font-size: 36px; line-height: 1;
+      cursor: pointer; z-index: 101;
+      transition: color .15s;
+    }
+    #lightbox-close:hover { color: #fff; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    /* Graph */
+    #graph {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 5; cursor: grab;
+    }
+    #graph:active { cursor: grabbing; }
+
+    /* Tooltip */
+    #tooltip {
+      position: fixed;
+      background: rgba(255,255,255,0.97);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      pointer-events: auto;
+      z-index: 20;
+      opacity: 0; transition: opacity .2s;
+      box-shadow: 0 4px 20px rgba(61,123,199,0.15);
+      max-width: 220px;
+    }
+    #tooltip .tip-name { font-weight: 600; margin-bottom: 3px; color: var(--hub); }
+    #tooltip .tip-type { font-size: 11px; color: var(--muted); }
+    #tooltip .tip-region { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    #tooltip .tip-region:empty { display: none; }
+    #tooltip .tip-url { font-size: 11px; margin-top: 3px; }
+    #tooltip .tip-url a { color: var(--accent); text-decoration: none; }
+    #tooltip .tip-url a:hover { text-decoration: underline; }
+    #tooltip .tip-url:empty { display: none; }
+
+    /* Debug bar */
+    #debug-bar {
+      position: fixed; bottom: 6px; left: 50%; transform: translateX(-50%);
+      font-size: 10px; color: rgba(26,39,68,0.25);
+      font-family: monospace; z-index: 10;
+      opacity: 0; pointer-events: none;
+    }
+
+    /* Implementation Form */
+    #impl-btn {
+      position: fixed; bottom: 28px; right: 32px;
+      z-index: 10;
+      background: linear-gradient(135deg, #3D7BC7, #2a5da0);
+      color: #fff;
+      border: none; border-radius: 20px;
+      padding: 9px 22px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(61,123,199,0.35);
+      transition: transform .15s, box-shadow .15s;
+      opacity: 0; animation: slideUp .7s ease 1.1s forwards;
+      white-space: nowrap;
+    }
+    #impl-btn:hover {
+      transform: scale(1.04);
+      box-shadow: 0 6px 24px rgba(61,123,199,0.5);
+    }
+    #impl-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 50; backdrop-filter: blur(3px);
+    }
+    #impl-overlay.active { display: block; }
+    #impl-drawer {
+      position: fixed; top: 0; right: -540px; width: 520px; height: 100%;
+      background: #fff;
+      border-left: 1px solid var(--border);
+      z-index: 51; overflow-y: auto;
+      transition: right .3s ease;
+      padding: 28px 28px 40px;
+    }
+    #impl-drawer.active { right: 0; }
+    #impl-drawer h2 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 20px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--hub); margin-bottom: 4px;
+    }
+    #impl-drawer .drawer-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+    #impl-drawer .close-btn {
+      position: absolute; top: 20px; right: 22px;
+      font-size: 26px; color: var(--muted);
+      cursor: pointer; line-height: 1; transition: color .15s;
+    }
+    #impl-drawer .close-btn:hover { color: var(--hub); }
+    .impl-field { margin-bottom: 14px; }
+    .impl-field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .impl-field input, .impl-field textarea {
+      width: 100%;
+      background: #F8FAFD;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text); font-family: 'DM Sans', sans-serif;
+      font-size: 13px; padding: 8px 12px;
+      outline: none; transition: border-color .15s;
+    }
+    .impl-field input:focus, .impl-field textarea:focus { border-color: var(--accent); }
+    #impl-table-wrap {
+      margin: 16px 0;
+      border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden;
+    }
+    .impl-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .impl-table th {
+      background: #F0F4F9;
+      color: var(--muted); padding: 6px 8px;
+      text-align: left; font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .impl-table td {
+      padding: 5px 8px;
+      border-bottom: 1px solid rgba(61,123,199,0.06);
+      vertical-align: middle; color: var(--text);
+    }
+    .impl-table tr:last-child td { border-bottom: none; }
+    .impl-table tr:hover td { background: rgba(61,123,199,0.04); }
+    .impl-table .api-name { font-weight: 500; min-width: 160px; }
+    .impl-table .ver-cell { text-align: center; }
+    .impl-table input[type=checkbox] { width:14px; height:14px; cursor:pointer; accent-color: var(--accent); }
+    #impl-submit {
+      width: 100%; padding: 11px;
+      background: linear-gradient(135deg, #3D7BC7, #2a5da0);
+      color: #fff; border: none; border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; margin-top: 8px;
+      transition: opacity .15s;
+    }
+    #impl-submit:hover { opacity: .88; }
+    #impl-submit:disabled { opacity: .5; cursor: not-allowed; }
+    #impl-msg { margin-top: 12px; font-size: 13px; text-align: center; min-height: 20px; }
+    #impl-msg.success { color: #2e7d32; }
+    #impl-msg.error   { color: #c62828; }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <div id="title">LSO Internet Access Interoperability</div>
+    <div id="subtitle">Loading…</div>
+  </div>
+
+  <div id="stats"></div>
+
+  <div id="logo">
+    <img src="https://www.mplify.net/wp-content/themes/base/images/logo.svg" alt="Mplify Alliance" />
+  </div>
+
+  <div id="api-dropdown-wrap">
+    <img id="lso-versions-img"
+         src="https://danielmef.github.io/lso-api-graph/LSO_Versions_and_Releases.png"
+         alt="LSO Versions and Releases" title="LSO Versions and Releases" />
+    <select id="api-select"><option>Loading APIs…</option></select>
+  </div>
+
+  <div id="legend"></div>
+  <div id="hint">Drag to reposition · Scroll to zoom · Click pinned node to release</div>
+
+  <!-- Lightbox -->
+  <div id="lightbox">
+    <span id="lightbox-close">&times;</span>
+    <img src="https://danielmef.github.io/lso-api-graph/LSO_Versions_and_Releases.png" alt="LSO Versions and Releases" />
+  </div>
+
+  <!-- Implementation Survey -->
+  <button id="impl-btn">&#10010; Submit My Implementation</button>
+  <div id="impl-overlay"></div>
+  <div id="impl-drawer">
+    <span class="close-btn" id="impl-close">&times;</span>
+    <h2>Implementation Registry</h2>
+    <p class="drawer-sub">Tell us which LSO APIs and versions your company has implemented.</p>
+    <div class="impl-field">
+      <label>Company Name *</label>
+      <input type="text" id="impl-company" placeholder="e.g. Acme Telecom" />
+    </div>
+    <div class="impl-field">
+      <label>Contact Email *</label>
+      <input type="email" id="impl-email" placeholder="you@company.com" />
+    </div>
+    <div id="impl-table-wrap">
+      <table class="impl-table" id="impl-table">
+        <thead>
+          <tr>
+            <th class="api-name">LSO API</th>
+            <th>Version</th>
+            <th style="text-align:center">Buy Side</th>
+            <th style="text-align:center">Sell Side</th>
+          </tr>
+        </thead>
+        <tbody id="impl-tbody"></tbody>
+      </table>
+    </div>
+    <div class="impl-field">
+      <label>Comments (optional)</label>
+      <textarea id="impl-comments" rows="3" placeholder="Any additional notes…"></textarea>
+    </div>
+    <button id="impl-submit">Submit</button>
+    <div id="impl-msg"></div>
+  </div>
+
+  <div id="debug-bar"></div>
+  <svg id="graph"></svg>
+  <div id="tooltip">
+    <div class="tip-name"></div>
+    <div class="tip-type"></div>
+    <div class="tip-region"></div>
+    <div class="tip-url"></div>
+  </div>
+
+  <script>
+  (async function() {
+
+    /* ── CONFIG ─────────────────────────────────────────────────────────── */
+    const BASE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT2iKTUXcsyHsFKgOQif0h-ghzvIdX4mjJPp4XGV21XHwpxwrQPBp1KWnLMUdexhcNfU4dqnOqNFV6p/pub?single=true&output=csv";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyk3_7fvEz4pRCbtbeWZExkkJ_FDhABY_URayVLsDN2g6Hb3SI3Xpp4IdGCY2_xwMHz/exec";
+
+    // Menu config — update MENU_GID once you have the published tab GID
+    const MENU_GID = "399938948";
+    const DEFAULT_NODES_GID = "234225689";
+    const DEFAULT_LINKS_GID = "1077047330";
+
+    // Fallback menu from Excel data
+    const FALLBACK_MENU = [
+      { label: "Internet Access std139 v0.2.0",   nodes_gid: "234225689",  links_gid: "1077047330" },
+      { label: "Internet Access std139 v0.3.0",   nodes_gid: "1365793813", links_gid: "1881293424" },
+      { label: "Internet Access std139.1 v0.0.1", nodes_gid: "1066942469", links_gid: "554762381"  },
+      { label: "Internet Access std139.1 v1.00",  nodes_gid: "1445882970", links_gid: "863539780"  },
+    ];
+
+    /* ── DROPDOWN ────────────────────────────────────────────────────────── */
+    const apiSelect = document.getElementById("api-select");
+    let apiConfig = [];
+
+    if (MENU_GID !== "YOUR_MENU_GID_HERE") {
+      try {
+        const r = await fetch(BASE_URL + "&gid=" + MENU_GID + "&t=" + Date.now());
+        const csv = await r.text();
+        apiConfig = d3.csvParse(csv).filter(r => r.label && r.nodes_gid && r.links_gid);
+      } catch(e) { apiConfig = FALLBACK_MENU; }
+    } else {
+      apiConfig = FALLBACK_MENU;
+    }
+
+    apiSelect.innerHTML = apiConfig.map(r =>
+      `<option value="${r.nodes_gid}|${r.links_gid}">${r.label}</option>`
+    ).join("");
+
+    apiSelect.addEventListener("change", () => {
+      const [ng, lg] = apiSelect.value.split("|");
+      const url = new URL(window.location.href);
+      url.searchParams.set("nodes", ng);
+      url.searchParams.set("links", lg);
+      window.location.href = url.toString();
+    });
+
+    const params    = new URLSearchParams(window.location.search);
+    const nodesGid  = params.get("nodes") || DEFAULT_NODES_GID;
+    const linksGid  = params.get("links") || DEFAULT_LINKS_GID;
+    const matchOpt  = [...apiSelect.options].find(o => o.value === `${nodesGid}|${linksGid}`);
+    if (matchOpt) matchOpt.selected = true;
+
+    const NODES_URL = BASE_URL + "&gid=" + nodesGid;
+    const LINKS_URL = BASE_URL + "&gid=" + linksGid;
+
+    /* ── DEBUG BAR ───────────────────────────────────────────────────────── */
+    const debugBar = document.getElementById("debug-bar");
+    debugBar.textContent = `nodes gid: ${nodesGid}  |  links gid: ${linksGid}`;
+    debugBar.style.opacity = "1";
+
+    /* ── FETCH DATA ──────────────────────────────────────────────────────── */
+    let nodes_csv, links_csv;
+    let nodes_source = "live", links_source = "live";
+
+    try {
+      const r = await fetch(NODES_URL + "&t=" + Date.now());
+      if (!r.ok) throw new Error();
+      nodes_csv = await r.text();
+    } catch(e) {
+      nodes_source = "fallback";
+      nodes_csv = `id,label,type,importance,url,region,glf,solution provider
+meta-title,Internet Access Product Schema,meta,,,,, 
+meta-subtitle,internet_access_std139v0.2.0,meta,,,,,
+product,Internet Access,hub,,,,, 
+amartus,Amartus,company,medium,www.amartus.com,Worldwide,,yes`;
+    }
+
+    try {
+      const r = await fetch(LINKS_URL + "&t=" + Date.now());
+      if (!r.ok) throw new Error();
+      links_csv = await r.text();
+    } catch(e) {
+      links_source = "fallback";
+      links_csv = `source,target\namartus,product`;
+    }
+
+    debugBar.textContent = `nodes gid: ${nodesGid} [${nodes_source}]  |  links gid: ${linksGid} [${links_source}]`;
+
+    /* ── PARSE ───────────────────────────────────────────────────────────── */
+    const allRows    = d3.csvParse(nodes_csv);
+    const metaTitle  = allRows.find(d => d.id === "meta-title");
+    const metaSub    = allRows.find(d => d.id === "meta-subtitle");
+    const nodes      = allRows.filter(d => d.type !== "meta");
+    const links      = d3.csvParse(links_csv).filter(d => d.source && d.target);
+
+    /* ── TITLE / SUBTITLE ────────────────────────────────────────────────── */
+    const titleEl    = document.getElementById("title");
+    const subtitleEl = document.getElementById("subtitle");
+    if (metaTitle  && metaTitle.label)  titleEl.textContent    = metaTitle.label.toUpperCase();
+    if (metaSub    && metaSub.label)    subtitleEl.textContent = metaSub.label;
+    titleEl.style.visibility    = "visible";
+    subtitleEl.style.visibility = "visible";
+    window._subtitleText = subtitleEl.textContent;
+
+    /* ── COLOUR / SIZE ───────────────────────────────────────────────────── */
+    const HUB_COLOR  = "#1A2744";
+    const NODE_COLOR = "#3D7BC7";
+    const NODE_LIGHT = "#6FA3DC";
+    const NODE_FILL  = "rgba(61,123,199,0.1)";
+
+    function radius(d) {
+      if (d.type === "hub") return 58;
+      if (d.importance === "high")   return 42;
+      if (d.importance === "low")    return 22;
+      return 32;
+    }
+
+    /* ── STATS ───────────────────────────────────────────────────────────── */
+    const companyCount = nodes.filter(n => n.type === "company").length;
+    const statsEl = document.getElementById("stats");
+    statsEl.innerHTML = `
+      <div class="stat">
+        <div class="stat-num">${companyCount}</div>
+        <div class="stat-lbl">PARTNERS</div>
+      </div>`;
+
+    /* ── LEGEND ──────────────────────────────────────────────────────────── */
+    const legendEl = document.getElementById("legend");
+    legendEl.innerHTML = `
+      <div class="leg">
+        <div class="leg-dot" style="background:${HUB_COLOR}"></div>
+        <span>Product Hub</span>
+      </div>
+      <div class="leg">
+        <div class="leg-dot" style="background:${NODE_COLOR};box-shadow:0 0 6px rgba(61,123,199,0.3)"></div>
+        <span>Implementation Partner</span>
+      </div>`;
+
+    /* ── SVG SETUP ───────────────────────────────────────────────────────── */
+    const W = window.innerWidth, H = window.innerHeight;
+    const svg = d3.select("#graph").attr("viewBox", [0, 0, W, H]);
+    const defs = svg.append("defs");
+
+    // Drop shadow filter for hub
+    const shadow = defs.append("filter").attr("id","shadow")
+      .attr("x","-30%").attr("y","-30%").attr("width","160%").attr("height","160%");
+    shadow.append("feDropShadow")
+      .attr("dx",0).attr("dy",4).attr("stdDeviation",8)
+      .attr("flood-color","rgba(61,123,199,0.25)");
+
+    // Glow filter for company nodes
+    const glow = defs.append("filter").attr("id","glow")
+      .attr("x","-40%").attr("y","-40%").attr("width","180%").attr("height","180%");
+    glow.append("feGaussianBlur").attr("in","SourceGraphic").attr("stdDeviation",4).attr("result","blur");
+    const glowMerge = glow.append("feMerge");
+    glowMerge.append("feMergeNode").attr("in","blur");
+    glowMerge.append("feMergeNode").attr("in","SourceGraphic");
+
+    // Shared participant gradient
+    const grad = defs.append("linearGradient").attr("id","grad-shared")
+      .attr("x1","0%").attr("y1","0%").attr("x2","100%").attr("y2","100%");
+    grad.append("stop").attr("offset","0%").attr("stop-color","#3D7BC7");
+    grad.append("stop").attr("offset","100%").attr("stop-color","#FD7801");
+
+    const g = svg.append("g");
+
+    // Initial zoom-out
+    const initScale = 0.82;
+    const initX = (W - W * initScale) / 2;
+    const initY = (H - H * initScale) / 2;
+    g.attr("transform", `translate(${initX},${initY}) scale(${initScale})`);
+
+    svg.call(d3.zoom().scaleExtent([0.2, 5])
+      .on("zoom", e => g.attr("transform", e.transform)));
+
+    /* ── SIMULATION ──────────────────────────────────────────────────────── */
+    const sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id(d => d.id).distance(180).strength(0.7))
+      .force("charge", d3.forceManyBody().strength(-1800))
+      .force("center", d3.forceCenter(W / 2, H / 2))
+      .force("collide", d3.forceCollide().radius(d => radius(d) + 35).strength(0.9));
+
+    /* ── LINKS ───────────────────────────────────────────────────────────── */
+    const linkSel = g.append("g").selectAll("path")
+      .data(links).join("path")
+      .attr("fill", "none")
+      .attr("stroke", "rgba(61,123,199,0.3)")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-linecap", "round")
+      .attr("d", "M0,0")
+      .style("opacity", 0)
+      .call(s => s.transition().duration(900).delay(500).style("opacity", 1));
+
+    /* ── HUB LINK LABEL ──────────────────────────────────────────────────── */
+    const hubLinkLabel = g.append("text")
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "central")
+      .attr("fill", "rgba(26,39,68,0.4)")
+      .attr("font-size", "12px")
+      .attr("font-family", "'DM Sans', sans-serif")
+      .attr("pointer-events", "none")
+      .style("opacity", 0)
+      .text(window._subtitleText || "");
+    setTimeout(() => hubLinkLabel.text(window._subtitleText || "").style("opacity", 1), 800);
+
+    /* ── NODES ───────────────────────────────────────────────────────────── */
+    const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
+    links.forEach(l => {
+      const s = nodeById[l.source?.id || l.source];
+      const t = nodeById[l.target?.id || l.target];
+      l._isHub = s?.type === "hub" || t?.type === "hub";
+    });
+
+    const nodeSel = g.append("g").selectAll("g")
+      .data(nodes).join("g")
+      .style("opacity", 0)
+      .style("cursor", "grab")
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end",   (e, d) => { if (!e.active) sim.alphaTarget(0); }))
+      .on("click", (e, d) => {
+        if (d.fx != null) { d.fx = null; d.fy = null; sim.alphaTarget(0.1).restart(); setTimeout(() => sim.alphaTarget(0), 600); }
+      })
+      .on("mouseover", (e, d) => {
+        const tip = document.getElementById("tooltip");
+        tip.querySelector(".tip-name").textContent = d.label;
+        tip.querySelector(".tip-type").textContent = d.type === "hub" ? "Product Hub" : "Implementation Partner";
+        tip.querySelector(".tip-type").style.color = d.type === "hub" ? HUB_COLOR : NODE_COLOR;
+        const regionEl = tip.querySelector(".tip-region");
+        regionEl.textContent = d.region ? "\u{1F30D} " + d.region : "";
+        const urlEl = tip.querySelector(".tip-url");
+        if (d.url) {
+          const href = d.url.startsWith("http") ? d.url : "https://" + d.url;
+          urlEl.innerHTML = `<a href="${href}" target="_blank" rel="noopener">\u{1F517} ${d.url}</a>`;
+        } else { urlEl.innerHTML = ""; }
+        tip.style.opacity = "1";
+        moveTip(e);
+
+        // Highlight
+        if (d.type === "company") {
+          nodeSel.transition().duration(150).style("opacity", n => n === d || n.type === "hub" ? 1 : 0.15);
+          linkSel.transition().duration(150).style("opacity", l => {
+            const sid = l.source.id || l.source, tid = l.target.id || l.target;
+            return sid === d.id || tid === d.id ? 1 : 0.08;
+          });
+        }
+      })
+      .on("mousemove", e => moveTip(e))
+      .on("mouseout", () => {
+        window._tipHideTimer = setTimeout(() => {
+          document.getElementById("tooltip").style.opacity = "0";
+          nodeSel.transition().duration(250).style("opacity", 1);
+          linkSel.transition().duration(250).style("opacity", 1);
+        }, 400);
+      });
+
+    function moveTip(e) {
+      const tip = document.getElementById("tooltip");
+      const x = e.clientX + 2, y = e.clientY + 2;
+      tip.style.left = (x + tip.offsetWidth  > window.innerWidth  ? e.clientX - tip.offsetWidth  - 2 : x) + "px";
+      tip.style.top  = (y + tip.offsetHeight > window.innerHeight ? e.clientY - tip.offsetHeight - 2 : y) + "px";
+    }
+
+    // Tooltip hover
+    (function() {
+      const tip = document.getElementById("tooltip");
+      tip.addEventListener("mouseenter", () => clearTimeout(window._tipHideTimer));
+      tip.addEventListener("mouseleave", () => {
+        tip.style.opacity = "0";
+        nodeSel.transition().duration(250).style("opacity", 1);
+        linkSel.transition().duration(250).style("opacity", 1);
+      });
+    })();
+
+    // Outer ring (hub)
+    nodeSel.filter(d => d.type === "hub")
+      .append("circle")
+      .attr("r", d => radius(d) + 14)
+      .attr("fill", "none")
+      .attr("stroke", "rgba(61,123,199,0.15)")
+      .attr("stroke-width", 1)
+      .attr("stroke-dasharray", "4 3");
+
+    // Main circle
+    nodeSel.append("circle")
+      .attr("r", radius)
+      .attr("fill", d => d.type === "hub" ? HUB_COLOR : NODE_FILL)
+      .attr("stroke", d => d.type === "hub" ? "none" : NODE_COLOR)
+      .attr("stroke-width", d => d.type === "hub" ? 0 : 1.5)
+      .attr("filter", d => d.type === "hub" ? "url(#shadow)" : "url(#glow)");
+
+    // Labels
+    nodeSel.each(function(d) {
+      const grp = d3.select(this);
+      const isHub = d.type === "hub";
+      const words = d.label.split(" ");
+      const lines = words.length <= 2 ? words
+        : [words.slice(0, Math.ceil(words.length / 2)).join(" "),
+           words.slice(Math.ceil(words.length / 2)).join(" ")];
+      const fs = isHub ? 14 : (d.importance === "high" ? 13 : 11);
+      const lh = isHub ? 18 : (d.importance === "high" ? 15 : 13);
+      const totalH = (lines.length - 1) * lh;
+
+      lines.forEach((line, i) => {
+        grp.append("text")
+          .attr("text-anchor", "middle")
+          .attr("dominant-baseline", "central")
+          .attr("y", -totalH / 2 + i * lh)
+          .attr("fill", isHub ? "#fff" : HUB_COLOR)
+          .attr("font-size", `${fs}px`)
+          .attr("font-weight", isHub ? 700 : 500)
+          .attr("font-family", isHub ? "'Barlow Condensed', sans-serif" : "'DM Sans', sans-serif")
+          .attr("letter-spacing", isHub ? "1px" : "0.3px")
+          .attr("pointer-events", "none")
+          .text(isHub ? line.toUpperCase() : line);
+      });
+    });
+
+    // GLF badge
+    const GLF_LOGO = "https://cdn.asp.events/CLIENT_Delinian_88510B86_A1E4_E5AE_E5572932A0001A1B/sites/glf-telecoms/media/GLF-Logo-Website.png";
+    const GLF_URL  = "https://glfcommunity.com/";
+    nodeSel.filter(d => d.type === "company" && d.glf && d.glf.toLowerCase() === "yes")
+      .each(function(d) {
+        const grp = d3.select(this);
+        const r = radius(d);
+        const blx = r * 0.62, bly = -r * 0.62;
+        const bw = 54, bh = 30, pad = 3;
+        const a = grp.append("a").attr("href", GLF_URL).attr("target","_blank").attr("rel","noopener").style("cursor","pointer");
+        a.append("rect").attr("x", blx).attr("y", bly - bh).attr("width", bw).attr("height", bh)
+          .attr("rx",4).attr("fill","#ffffff").attr("stroke", NODE_COLOR).attr("stroke-width",1.5);
+        a.append("image").attr("href", GLF_LOGO)
+          .attr("x", blx + pad).attr("y", bly - bh + pad)
+          .attr("width", bw - pad*2).attr("height", bh - pad*2)
+          .attr("preserveAspectRatio","xMidYMid meet");
+      });
+
+    // Solution Provider badge
+    nodeSel.filter(d => d.type === "company" && d["solution provider"] && d["solution provider"].toLowerCase() === "yes")
+      .each(function(d) {
+        const grp = d3.select(this);
+        const r = radius(d);
+        const fs = 12, lh = 14, pad = 8;
+        const bw = 56, bh = lh * 2 + pad * 2;
+        const bx = r * 0.65, by = r * 0.65;
+        grp.append("rect").attr("x", bx).attr("y", by).attr("width", bw).attr("height", bh)
+          .attr("rx",3).attr("fill","#fff").attr("stroke", NODE_COLOR).attr("stroke-width",1.5);
+        ["Solution","Provider"].forEach((word, i) => {
+          grp.append("text")
+            .attr("x", bx + bw/2).attr("y", by + pad + lh * (i + 0.5))
+            .attr("text-anchor","middle").attr("dominant-baseline","central")
+            .attr("fill", NODE_COLOR).attr("font-size", `${fs}px`).attr("font-weight",400)
+            .attr("font-family","'DM Sans', sans-serif").attr("pointer-events","none")
+            .text(word);
+        });
+      });
+
+    // Staggered fade-in
+    nodeSel.transition().duration(600).delay((d,i) => 350 + i*45).style("opacity", 1);
+
+    /* ── TICK ────────────────────────────────────────────────────────────── */
+    sim.on("tick", () => {
+      linkSel.each(function(d) {
+        const dx = d.target.x - d.source.x, dy = d.target.y - d.source.y;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+        const ux = dx/dist, uy = dy/dist;
+        const rs = radius(d.source), rt = radius(d.target);
+        const x1 = d.source.x + ux*rs, y1 = d.source.y + uy*rs;
+        const x2 = d.target.x - ux*rt, y2 = d.target.y - uy*rt;
+        d3.select(this).attr("d", `M${x1},${y1} L${x2},${y2}`);
+      });
+      nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+
+    /* ── RESIZE ──────────────────────────────────────────────────────────── */
+    window.addEventListener("resize", () => {
+      const W2 = window.innerWidth, H2 = window.innerHeight;
+      svg.attr("viewBox", [0, 0, W2, H2]);
+      sim.force("center", d3.forceCenter(W2/2, H2/2)).alphaTarget(0.1).restart();
+      setTimeout(() => sim.alphaTarget(0), 500);
+    });
+
+    /* ── LIGHTBOX ────────────────────────────────────────────────────────── */
+    (function() {
+      const lb = document.getElementById("lightbox");
+      const img = document.getElementById("lso-versions-img");
+      const close = document.getElementById("lightbox-close");
+      img.addEventListener("click", () => lb.classList.add("active"));
+      lb.addEventListener("click", () => lb.classList.remove("active"));
+      close.addEventListener("click", e => { e.stopPropagation(); lb.classList.remove("active"); });
+      document.addEventListener("keydown", e => { if (e.key === "Escape") lb.classList.remove("active"); });
+    })();
+
+    /* ── IMPLEMENTATION FORM ─────────────────────────────────────────────── */
+    (function() {
+      const apis = [
+        { name: "Geographic Address",             versions: ["6.0.0-RC","7.0.0-RC","7.0.1"] },
+        { name: "Geographic Site",                versions: ["6.0.0-RC","7.0.0-RC","7.0.1"] },
+        { name: "Product Catalog",                versions: ["1.0.0-RC","2.0.0-RC","3.0.0-RC","4.0.1"] },
+        { name: "Product Offering Qualification", versions: ["6.0.0-RC","7.0.0-RC","7.0.1","8.0.0-RC","8.0.0"] },
+        { name: "Quote",                          versions: ["6.0.0-RC","7.0.0-RC","8.0.0","8.0.1","9.0.0-RC","10.0.0"] },
+        { name: "Product Offering Availability",  versions: ["1.0.0-RC","2.0.0-RC","3.0.0-RC","4.0.0-RC","4.0.0"] },
+        { name: "Pricing Discovery",              versions: ["1.0.0-RC","2.0.0-RC","3.0.0-RC","4.0.0-RC","4.0.0"] },
+        { name: "Product Order",                  versions: ["6.0.0-RC","7.0.0-RC","8.0.0-RC","9.0.0-RC","10.0.0","11.0.0-RC","11.0.1"] },
+        { name: "Product Inventory",              versions: ["6.0.0-RC","7.0.0-RC","7.0.1","7.0.2","8.0.0-RC","8.0.0"] },
+        { name: "Trouble Ticket",                 versions: ["1.0.0-RC","2.0.0-RC","3.0.0-RC","4.0.0","5.0.0-RC","5.0.0"] },
+        { name: "Appointment",                    versions: ["1.0.0-RC","2.0.0","3.0.0-RC","3.0.1"] },
+        { name: "Work Order",                     versions: ["1.0.0-RC","2.0.0","3.0.0-RC","3.0.0"] },
+        { name: "Billing",                        versions: ["1.0.0-RC","2.0.0","3.0.0-RC","3.0.1"] },
+        { name: "Circuit Impairment & Maintenance", versions: ["1.0.0-RC","1.0.0"] },
+      ];
+
+      const tbody = document.getElementById("impl-tbody");
+      apis.forEach(api => {
+        api.versions.forEach((ver, i) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="api-name">${i === 0 ? api.name : ""}</td>
+            <td>${ver}</td>
+            <td class="ver-cell"><input type="checkbox" data-api="${api.name}" data-ver="${ver}" data-side="buy" /></td>
+            <td class="ver-cell"><input type="checkbox" data-api="${api.name}" data-ver="${ver}" data-side="sell" /></td>`;
+          tbody.appendChild(tr);
+        });
+      });
+
+      const drawer  = document.getElementById("impl-drawer");
+      const overlay = document.getElementById("impl-overlay");
+      const btn     = document.getElementById("impl-btn");
+      const closeBtn= document.getElementById("impl-close");
+
+      btn.addEventListener("click",    () => { drawer.classList.add("active"); overlay.classList.add("active"); });
+      closeBtn.addEventListener("click",() => { drawer.classList.remove("active"); overlay.classList.remove("active"); });
+      overlay.addEventListener("click",() => { drawer.classList.remove("active"); overlay.classList.remove("active"); });
+      document.addEventListener("keydown", e => { if (e.key === "Escape") { drawer.classList.remove("active"); overlay.classList.remove("active"); } });
+
+      document.getElementById("impl-submit").addEventListener("click", async () => {
+        const company  = document.getElementById("impl-company").value.trim();
+        const email    = document.getElementById("impl-email").value.trim();
+        const comments = document.getElementById("impl-comments").value.trim();
+        const msgEl    = document.getElementById("impl-msg");
+        const submitBtn= document.getElementById("impl-submit");
+
+        if (!company) { msgEl.className = "error"; msgEl.textContent = "Please enter your company name."; return; }
+        if (!email)   { msgEl.className = "error"; msgEl.textContent = "Please enter your contact email."; return; }
+
+        const selections = [];
+        document.querySelectorAll("#impl-tbody input[type=checkbox]:checked").forEach(cb => {
+          selections.push({ api: cb.dataset.api, version: cb.dataset.ver, side: cb.dataset.side });
+        });
+        if (!selections.length) { msgEl.className = "error"; msgEl.textContent = "Please select at least one API version."; return; }
+
+        submitBtn.disabled = true;
+        msgEl.className = ""; msgEl.textContent = "Submitting…";
+
+        try {
+          const payload = JSON.stringify({ company, email, comments, selections, timestamp: new Date().toISOString() });
+          await fetch(APPS_SCRIPT_URL + "?data=" + encodeURIComponent(payload), { method: "GET", mode: "no-cors" });
+        } catch(e) { console.log("Fetch note:", e); }
+
+        msgEl.className = "success";
+        msgEl.textContent = "Thank you! Your implementation has been recorded.";
+        submitBtn.disabled = false;
+      });
+    })();
+
+  })();
+  </script>
+</body>
+</html>
